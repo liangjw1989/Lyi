@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+  <title>灵译 · 翻译与转换神器</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    /* ========== 样式部分 (已优化，保持不变) ========== */
+    :root {
+      --primary: #4f6ef7; --primary-dark: #3b54d4; --primary-light: #eef2ff;
+      --gradient-1: linear-gradient(135deg, #4f6ef7, #7b5cff); --gradient-2: linear-gradient(135deg, #4f6ef7, #a855f7, #ec4899);
+      --bg: #f0f4fd; --bg-card: rgba(255,255,255,0.75); --text: #1e293b; --text-secondary: #64748b;
+      --border: #e2e8f0; --shadow: 0 20px 40px -12px rgba(0,0,0,0.12); --radius: 2rem; --radius-sm: 1rem;
+      --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(145deg, #f0f4fd 0%, #e6ebf7 50%, #f8fafc 100%);
+      min-height: 100vh; display: flex; justify-content: center; color: var(--text);
+      padding: 1rem; -webkit-font-smoothing: antialiased;
+    }
+    body::before {
+      content: ''; position: fixed; top: -50%; right: -30%; width: 80vw; height: 80vw;
+      background: radial-gradient(circle, rgba(79,110,247,0.06) 0%, transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+    .app-wrapper { width: 100%; max-width: 1200px; display: flex; flex-direction: column; gap: 1.5rem; position: relative; z-index: 1; }
+    .card {
+      background: var(--bg-card); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-radius: var(--radius); padding: 1.5rem; box-shadow: var(--shadow);
+      border: 1px solid rgba(255,255,255,0.8); transition: var(--transition);
+    }
+    .card:hover { box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15); }
+    .top-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+    .brand { display: flex; align-items: center; gap: 0.75rem; }
+    .brand-icon {
+      background: var(--gradient-1); width: 48px; height: 48px; border-radius: 18px;
+      display: flex; align-items: center; justify-content: center; color: white; font-size: 24px;
+      box-shadow: 0 10px 20px -5px rgba(79,110,247,0.4); animation: pulse 3s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 10px 20px -5px rgba(79,110,247,0.4); }
+      50% { box-shadow: 0 15px 30px -5px rgba(79,110,247,0.6); }
+    }
+    .brand-text h1 {
+      font-weight: 700; font-size: 1.8rem; background: linear-gradient(to right, #1e293b, #334155);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .brand-text span { font-size: 0.8rem; color: var(--text-secondary); font-weight: 500; }
+    .btn {
+      padding:0.5rem 1.2rem; border-radius:2rem; font-weight:600; border:none;
+      cursor:pointer; display:inline-flex; align-items:center; gap:0.5rem;
+      transition:0.2s; font-size:0.85rem; font-family:inherit; white-space:nowrap;
+    }
+    .btn-primary { background:var(--gradient-1); color:white; box-shadow:0 4px 15px rgba(79,110,247,0.3); }
+    .btn-primary:hover { background: linear-gradient(135deg, #3b54d4, #6a4be0); }
+    .btn-outline { background:white; border:1.5px solid var(--border); color:#334155; }
+    .btn-outline:hover { background:#f8fafc; border-color:var(--primary); }
+    .btn-danger { background:#ef4444; color:white; }
+    .btn-sm { padding:0.3rem 0.8rem; font-size:0.75rem; }
+    .tabs { display:flex; gap:0.5rem; margin-bottom:1.5rem; flex-wrap:wrap; }
+    .tab-btn { background:white; border:1.5px solid var(--border); color:#64748b; padding:0.6rem 1.5rem; border-radius:2rem; font-weight:600; cursor:pointer; transition:0.2s; font-size:0.9rem; }
+    .tab-btn.active { background:var(--gradient-1); color:white; border-color:transparent; box-shadow:0 4px 15px rgba(79,110,247,0.3); }
+    .upload-area {
+      border:2px dashed #cbd5e1; border-radius:1.5rem; padding:2.5rem 2rem;
+      text-align:center; cursor:pointer; background:rgba(248,250,252,0.7);
+      margin:1rem 0; transition:0.2s; position:relative;
+    }
+    .upload-area i { font-size:2.5rem; color:var(--primary); margin-bottom:0.5rem; display:block; }
+    .upload-title { font-weight:600; font-size:1rem; margin-bottom:0.3rem; }
+    .upload-hint { font-size:0.8rem; color:var(--text-secondary); }
+    .file-item {
+      background:white; border-radius:1rem; padding:0.9rem; margin-bottom:0.6rem;
+      display:flex; align-items:center; gap:0.8rem; border:1px solid var(--border);
+      flex-wrap:wrap; transition:0.2s; animation:slideIn 0.3s ease-out;
+    }
+    @keyframes slideIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
+    .file-icon { font-size:1.5rem; color:var(--primary); flex-shrink:0; }
+    .file-info { flex:1; min-width:140px; }
+    .file-name { font-weight:600; font-size:0.9rem; word-break:break-all; }
+    .progress-bar { width:80px; height:5px; background:#e2e8f0; border-radius:10px; overflow:hidden; margin-top:0.3rem; }
+    .progress-fill { height:100%; background:var(--gradient-1); width:0%; transition:0.3s; }
+    .toast-notification { position:fixed; bottom:2rem; right:2rem; background:#1e293b; color:white; padding:0.8rem 1.5rem; border-radius:2rem; transform:translateY(100px); opacity:0; transition:0.3s; z-index:999; }
+    .toast-notification.show { transform:translateY(0); opacity:1; }
+    @media (max-width: 768px) {
+      body { padding:0.5rem; } .card { padding:1rem; }
+      .brand-text h1 { font-size:1.4rem; } .btn { padding:0.4rem 1rem; font-size:0.8rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="app-wrapper">
+  <div class="card top-bar">
+    <div class="brand">
+      <div class="brand-icon"><i class="fas fa-language"></i></div>
+      <div class="brand-text"><h1>灵译</h1><span>文档翻译与格式转换神器</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="tabs">
+      <button class="tab-btn active" id="translateTabBtn">🌐 文档翻译</button>
+      <button class="tab-btn" id="convertTabBtn">🔄 格式转换</button>
+    </div>
+
+    <div id="translateModule">
+      <div class="upload-area" id="translateUpload" style="position:relative;">
+        <i class="fas fa-cloud-upload-alt"></i>
+        <div class="upload-title">点击上传需翻译的文件</div>
+        <div class="upload-hint">PDF · Word · TXT · 图片</div>
+        <input type="file" id="translateFileInput" multiple accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+         style="position:absolute; opacity:0; width:100%; height:100%; top:0; left:0; cursor:pointer;">
+      </div>
+      <div id="translateFileList"></div>
+    </div>
+
+    <div id="convertModule" style="display:none;">
+      <div class="upload-area" id="convertUpload" style="position:relative;">
+        <i class="fas fa-exchange-alt"></i>
+        <div class="upload-title">点击上传需转换格式的文件</div>
+        <div class="upload-hint">支持 PDF · Word · TXT · 图片</div>
+        <input type="file" id="convertFileInput" multiple accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+         style="position:absolute; opacity:0; width:100%; height:100%; top:0; left:0; cursor:pointer;">
+      </div>
+      <div id="convertFileList"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:600; margin-bottom:1rem;">
+      <i class="fas fa-check-circle" style="color:#10b981;"></i> 已完成的文档
+    </div>
+    <div id="completedList"><div style="color:#94a3b8; text-align:center; padding:2rem;">暂无完成的文档</div></div>
+  </div>
+</div>
+<div class="toast-notification" id="toast"></div>
+
+<!-- 依赖库 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+
+<script>
+(() => {
+  // ==================== 核心配置 ====================
+  const API_PROXY_URL = 'https://1430386389-cd8v5r6ng0.ap-beijing.tencentscf.com';
+
+  // 全局状态
+  const state = {
+    translateFiles: [],
+    convertFiles: [],
+    completed: [],
+    nextId: 1,
+  };
+
+  // 工具函数
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
+  function updateFileProgress(fileObj) {
+    const fileItem = document.querySelector(`.file-item[data-file-id="${fileObj.id}"]`);
+    if (!fileItem) return;
+    const progressFill = fileItem.querySelector('.progress-fill');
+    const statusText = fileItem.querySelector('small');
+    if (progressFill) progressFill.style.width = fileObj.progress + '%';
+    if (statusText) {
+      statusText.textContent = fileObj.status === 'translating' ? '翻译中...' :
+                               fileObj.status === 'extracting' ? '提取文字...' : '';
+    }
+  }
+
+  // ==================== DOM 元素 ====================
+  const $ = id => document.getElementById(id);
+  const translateUpload = $('translateUpload');
+  const translateFileInput = $('translateFileInput');
+  const translateFileList = $('translateFileList');
+  const convertUpload = $('convertUpload');
+  const convertFileInput = $('convertFileInput');
+  const convertFileList = $('convertFileList');
+  const completedList = $('completedList');
+  const translateTabBtn = $('translateTabBtn');
+  const convertTabBtn = $('convertTabBtn');
+  const translateModule = $('translateModule');
+  const convertModule = $('convertModule');
+  const toast = $('toast');
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  // ==================== 标签切换 ====================
+  translateTabBtn.addEventListener('click', () => {
+    translateTabBtn.classList.add('active'); convertTabBtn.classList.remove('active');
+    translateModule.style.display = 'block'; convertModule.style.display = 'none';
+  });
+  convertTabBtn.addEventListener('click', () => {
+    convertTabBtn.classList.add('active'); translateTabBtn.classList.remove('active');
+    translateModule.style.display = 'none'; convertModule.style.display = 'block';
+  });
+
+  // ==================== 文件上传 (一键选择) ====================
+  translateUpload.addEventListener('click', () => translateFileInput.click());
+  translateFileInput.addEventListener('change', e => {
+    if (e.target.files.length) { addFiles(e.target.files, 'translate'); translateFileInput.value = ''; }
+  });
+  convertUpload.addEventListener('click', () => convertFileInput.click());
+  convertFileInput.addEventListener('change', e => {
+    if (e.target.files.length) { addFiles(e.target.files, 'convert'); convertFileInput.value = ''; }
+  });
+
+  // ==================== 文件处理 ====================
+  function addFiles(files, type) {
+    for (const file of files) {
+      const ext = file.name.split('.').pop().toLowerCase();
+      if (!['pdf','docx','doc','txt','png','jpg','jpeg'].includes(ext)) {
+        showToast(`不支持格式: ${file.name}`, true); continue;
+      }
+      const fileObj = {
+        id: state.nextId++, file, name: file.name, ext, type,
+        status: 'pending', progress: 0, targetLang: 'zh-CN',
+        fmt: 'pdf', extractedText: '', translatedText: ''
+      };
+      if (type === 'translate') state.translateFiles.push(fileObj);
+      else state.convertFiles.push(fileObj);
+    }
+    renderAll();
+  }
+
+  function renderAll() {
+    translateFileList.innerHTML = state.translateFiles.map(f => renderFileItem(f, 'translate')).join('');
+    convertFileList.innerHTML = state.convertFiles.map(f => renderFileItem(f, 'convert')).join('');
+    completedList.innerHTML = state.completed.map(f => `
+      <div class="file-item">
+        <i class="fas fa-check-circle" style="color:#10b981;"></i>
+        <div class="file-info"><div class="file-name">${escapeHtml(f.name)}</div><small>${f.filename}</small></div>
+        <div class="file-actions">
+          <button class="btn btn-primary btn-sm download-btn" data-url="${f.blobUrl}" data-filename="${f.filename}">下载</button>
+        </div>
+      </div>
+    `).join('') || '<div style="color:#94a3b8; text-align:center; padding:2rem;">暂无完成的文档</div>';
+    bindEvents();
+  }
+
+  function renderFileItem(f, type) {
+    const actionLabel = type === 'translate' ? '翻译' : '转换';
+    const actionBtn = `<button class="btn btn-primary btn-sm process-btn" data-id="${f.id}"><i class="fas fa-play"></i> ${actionLabel}</button>`;
+    const deleteBtn = `<button class="btn btn-danger btn-sm delete-btn" data-id="${f.id}"><i class="fas fa-trash"></i></button>`;
+    return `
+      <div class="file-item" data-file-id="${f.id}">
+        <i class="fas fa-file file-icon"></i>
+        <div class="file-info">
+          <div class="file-name">${escapeHtml(f.name)}</div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${f.progress}%"></div></div>
+          <small>${f.status}</small>
+        </div>
+        <div class="file-actions">${actionBtn}${deleteBtn}</div>
+      </div>`;
+  }
+
+  function bindEvents() {
+    document.querySelectorAll('.process-btn').forEach(b => b.addEventListener('click', () => {
+      const f = findFile(parseInt(b.dataset.id)); if (f) processFile(f);
+    }));
+    document.querySelectorAll('.delete-btn').forEach(b => b.addEventListener('click', () => {
+      const id = parseInt(b.dataset.id);
+      state.translateFiles = state.translateFiles.filter(f => f.id !== id);
+      state.convertFiles = state.convertFiles.filter(f => f.id !== id);
+      renderAll();
+    }));
+    document.querySelectorAll('.download-btn').forEach(b => b.addEventListener('click', () => {
+      const a = document.createElement('a'); a.href = b.dataset.url; a.download = b.dataset.filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }));
+  }
+
+  function findFile(id) {
+    return state.translateFiles.find(f => f.id === id) || state.convertFiles.find(f => f.id === id);
+  }
+
+  async function processFile(f) {
+    if (f.type === 'translate') await translateFile(f);
+    else await convertFile(f);
+  }
+
+  // ==================== 文本提取 ====================
+  async function extractText(file, ext) {
+    switch(ext) {
+      case 'pdf': return await extractPDF(file);
+      case 'docx': case 'doc': return await extractDocx(file);
+      case 'txt': return await file.text();
+      case 'png': case 'jpg': case 'jpeg': return await extractImage(file);
+      default: throw new Error('不支持');
+    }
+  }
+  async function extractPDF(file) {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    let text = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      text += content.items.map(item => item.str).join(' ') + '\n';
+    }
+    return text.replace(/\s{2,}/g, ' ').trim();
+  }
+  async function extractDocx(file) {
+    const buf = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer: buf });
+    return result.value.trim();
+  }
+  async function extractImage(file) {
+    const worker = await Tesseract.createWorker('chi_sim+eng', 1);
+    const { data: { text } } = await worker.recognize(file);
+    await worker.terminate();
+    return text.trim();
+  }
+
+  // ==================== 终极清洗与翻译 ====================
+  async function callProxy(text, target) {
+    const MAX_CHARS = 3000;
+    const callSingle = async (chunk) => {
+      const res = await fetch(API_PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: chunk, target })
+      });
+      let raw = await res.text();
+      raw = raw.replace(/^\uFEFF/, '').trim();
+
+      // ===== 暴力清洗：找到第一个可读字符，从这里开始 =====
+      const startIndex = raw.search(/[\u4e00-\u9fa5a-zA-Z0-9]/);
+      if (startIndex > 0) {
+        raw = raw.substring(startIndex); // 砍掉前面所有内容
+      }
+      // 清理残留的转义和引号
+      raw = raw.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+      // 去除所有花括号和多余的双引号
+      raw = raw.replace(/[{}]/g, '').replace(/"/g, '');
+      // 将连续空格合并，但保留换行
+      raw = raw.replace(/[ \t]+/g, ' ').trim();
+      // ===== 清洗结束 =====
+
+      return raw;
+    };
+
+    if (text.length > MAX_CHARS) {
+      const sentences = text.match(/[^。！？\.!\?\n]+[。！？\.!\?\n]+|[^。！？\.!\?\n]+$/g) || [text];
+      let batches = [], cur = '';
+      for (const s of sentences) {
+        if ((cur + s).length > MAX_CHARS && cur) { batches.push(cur.trim()); cur = s; }
+        else cur += s;
+      }
+      if (cur.trim()) batches.push(cur.trim());
+      const results = [];
+      for (const batch of batches) results.push(await callSingle(batch));
+      return results.join('');
+    }
+    return await callSingle(text);
+  }
+
+  // ==================== 翻译文件 ====================
+  async function translateFile(f) {
+    f.status='extracting'; f.progress=0; updateFileProgress(f);
+    try {
+      const text = await extractText(f.file, f.ext);
+      if (!text.trim()) throw new Error('没有文字');
+      f.extractedText = text;
+      f.status='translating'; f.progress=30; updateFileProgress(f);
+
+      // 直接翻译整个文本，内部会分段
+      const translated = await callProxy(text, f.targetLang);
+      f.translatedText = translated;
+      f.progress = 80; updateFileProgress(f);
+
+      const { blob, filename } = await genPDF(translated, f.name);
+      f.blobUrl = URL.createObjectURL(blob); f.filename = filename; f.status = 'done';
+      state.translateFiles = state.translateFiles.filter(x => x.id !== f.id);
+      state.completed.push(f);
+      showToast('翻译完成');
+    } catch(e) { f.status='error'; showToast(`翻译失败: ${e.message}`, true); }
+    renderAll();
+  }
+
+  async function convertFile(f) {
+    f.status='extracting'; f.progress=0; renderAll();
+    try {
+      const text = await extractText(f.file, f.ext);
+      if (!text.trim()) throw new Error('没有文字');
+      f.extractedText = text; f.progress = 50;
+      const { blob, filename } = await genPDF(text, f.name);
+      f.blobUrl = URL.createObjectURL(blob); f.filename = filename; f.status = 'done';
+      state.convertFiles = state.convertFiles.filter(x => x.id !== f.id);
+      state.completed.push(f);
+      showToast('转换完成');
+    } catch(e) { f.status='error'; showToast(`转换失败: ${e.message}`, true); }
+    renderAll();
+  }
+
+  // ==================== 强制分段 genPDF ====================
+  async function genPDF(text, name) {
+    let container = null;
+    try {
+      const { jsPDF } = window.jspdf;
+      if (!jsPDF || typeof html2canvas !== 'function') throw new Error('依赖库未加载');
+
+      // 1. 强制段落预处理：如果文本没有换行，就按句号/问号/分号强制分段
+      let processedText = text || '暂无内容';
+      if (!processedText.includes('\n')) {
+        processedText = processedText
+          .replace(/([。！？；])(?=[^\n])/g, '$1\n')
+          .replace(/([.!?])\s+(?=[A-Z\u4e00-\u9fa5])/g, '$1\n');
+      }
+      processedText = processedText.replace(/\n{2,}/g, '\n\n');
+      
+      const rawParagraphs = processedText.split(/\n\s*\n/).filter(p => p.trim());
+      let html = '';
+      
+      const isTitle = (p) => {
+        const trimmed = p.trim();
+        return trimmed.length < 80 && !/[。！？\.!\?]$/.test(trimmed) &&
+          (/^[\d一二三四五六七八九十]+[\.\、\s]/.test(trimmed) ||
+           /^(Abstract|Introduction|Methods|Results|Discussion|Conclusion|References|摘要|引言|方法|结果|讨论|结论|参考文献)/i.test(trimmed));
+      };
+
+      for (let para of rawParagraphs) {
+        if (para.trim() === '') continue;
+        if (/^[\-—=_*#]{3,}$/.test(para.trim())) {
+          html += '<hr style="border:none;border-top:1px solid #000;margin:0.8em 0;">';
+        } else if (isTitle(para)) {
+          html += `<div style="font-size:18px;font-weight:bold;margin:1.2em 0 0.3em;">${escapeHtml(para)}</div>`;
+        } else {
+          html += `<p style="font-size:16px;text-indent:2em;margin:1em 0;line-height:1.9;">${escapeHtml(para)}</p>`;
+        }
+      }
+
+      // 2. 渲染到 PDF
+      const mmToPx = 3.779528;
+      const marginMm = 12;
+      const usableW = 210 - marginMm*2, usableH = 297 - marginMm*2;
+      const cssW = Math.floor(usableW*mmToPx), cssPageH = Math.floor(usableH*mmToPx);
+
+      container = document.createElement('div');
+      container.style.cssText = `position:absolute;left:-9999px;top:0;width:${cssW}px;height:${cssPageH}px;overflow:hidden;background:#fff;`;
+      const inner = document.createElement('div');
+      inner.style.cssText = `width:100%;padding:18px;box-sizing:border-box;font-family:"SimSun","宋体",serif;color:#000;background:#fff;line-height:1.9;`;
+      inner.innerHTML = html;
+      container.appendChild(inner);
+      document.body.appendChild(container);
+
+      await new Promise(r => requestAnimationFrame(r));
+      await new Promise(r => requestAnimationFrame(r));
+      const totalH = container.scrollHeight;
+
+      const doc = new jsPDF('p', 'mm', 'a4');
+      let pageCount = 0, scroll = 0;
+      while (scroll < totalH) {
+        container.scrollTop = scroll;
+        await new Promise(r => requestAnimationFrame(r));
+        const canvas = await html2canvas(container, { scale:2, useCORS:true, allowTaint:true, logging:false });
+        const imgData = canvas.toDataURL('image/jpeg', 0.92);
+        if (pageCount > 0) doc.addPage();
+        const imgH = (canvas.height / (cssW*2)) * usableW;
+        doc.addImage(imgData, 'JPEG', marginMm, marginMm, usableW, imgH);
+        scroll += cssPageH;
+        pageCount++;
+      }
+      if (container.parentNode) container.parentNode.removeChild(container);
+      console.log(`✅ PDF 共 ${pageCount} 页`);
+      return { blob: doc.output('blob'), filename: `${name}.pdf` };
+    } catch (err) {
+      if (container && container.parentNode) container.parentNode.removeChild(container);
+      console.error(err);
+      const { jsPDF } = window.jspdf;
+      const eDoc = new jsPDF(); eDoc.text('PDF 生成失败: ' + err.message, 10, 15);
+      return { blob: eDoc.output('blob'), filename: `${name}_error.pdf` };
+    }
+  }
+
+  function showToast(msg, err = false) {
+    toast.textContent = msg;
+    toast.style.background = err ? '#dc2626' : '#1e293b';
+    toast.classList.add('show');
+    clearTimeout(toast._timeout);
+    toast._timeout = setTimeout(() => toast.classList.remove('show'), 2500);
+  }
+
+  // 初始化
+  renderAll();
+})();
+</script>
+</body>
+</html>
