@@ -527,44 +527,60 @@
 
   // ==================== 终极清洗 + 智能分段 callProxy ====================
   async function callProxy(text, target) {
-    const MAX_CHARS = 3000;
+  const backendUrl = 'https://1430386389-cd8v5r6ng0.ap-beijing.tencentscf.com';
+  const MAX_CHARS = 3000;
 
-    const deepClean = (raw) => {
-      if (!raw) return '';
-      const start = raw.search(/[\u4e00-\u9fa5a-zA-Z0-9]/);
-      if (start > 0) raw = raw.substring(start);
-      raw = raw.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
-      raw = raw.replace(/[{}]/g, '').replace(/"/g, '');
-      raw = raw.replace(/[ \t]+/g, ' ').trim();
-      if (!raw.includes('\n')) raw = raw.replace(/([。！？；])(?=[^\n])/g, '$1\n');
-      return raw;
-    };
+  // 深度清洗数据
+  const deepClean = (raw) => {
+    if (!raw) return '';
+    
+    // 1. 暴力剔除开头的所有非中文字符、字母和数字
+    // 因为用户反馈开头总有残留的 JSON 乱码
+    raw = raw.replace(/^[^a-zA-Z\u4e00-\u9fa5]*/, '');
 
-    const callSingle = async (chunk) => {
-      const res = await fetch(API_PROXY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: chunk, target })
-      });
-      let raw = await res.text();
-      raw = raw.replace(/^\uFEFF/, '').trim();
-      return deepClean(raw);
-    };
+    // 2. 替换转义符为真实字符
+    raw = raw.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+    
+    // 3. 清除无序的 json 大括号和引号残留
+    raw = raw.replace(/[{}]/g, '').replace(/"/g, '');
 
-    if (text.length > MAX_CHARS) {
-      const sentences = text.match(/[^。！？\.!\?\n]+[。！？\.!\?\n]+|[^。！？\.!\?\n]+$/g) || [text];
-      let batches = [], cur = '';
-      for (const s of sentences) {
-        if ((cur + s).length > MAX_CHARS && cur) { batches.push(cur.trim()); cur = s; }
-        else cur += s;
-      }
-      if (cur.trim()) batches.push(cur.trim());
-      const results = [];
-      for (const batch of batches) results.push(await callSingle(batch));
-      return results.join('');
+    // 4. 清理多余空格
+    raw = raw.replace(/[ \t]+/g, ' ').trim();
+
+    // 5. 如果是没有换行的长段落，根据标点符号强制插入换行，方便后续排版
+    if (!raw.includes('\n')) {
+      raw = raw.replace(/([。！？；\.!\?;])(?=[^\n])/g, '$1\n');
     }
-    return await callSingle(text);
+    return raw;
+  };
+
+  // 分段请求函数（处理长文本超过 3000 字时的截断）
+  const callSingle = async (chunk) => {
+    const res = await fetch(backendUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: chunk, target })
+    });
+    let raw = await res.text();
+    raw = raw.replace(/^\uFEFF/, '').trim();
+    return deepClean(raw);
+  };
+
+  // 根据文本长度决定是否分块请求
+  if (text.length > MAX_CHARS) {
+    const sentences = text.match(/[^。！？\.!\?\n]+[。！？\.!\?\n]+|[^。！？\.!\?\n]+$/g) || [text];
+    let batches = [], cur = '';
+    for (const s of sentences) {
+      if ((cur + s).length > MAX_CHARS && cur) { batches.push(cur.trim()); cur = s; }
+      else cur += s;
+    }
+    if (cur.trim()) batches.push(cur.trim());
+    const results = [];
+    for (const batch of batches) results.push(await callSingle(batch));
+    return results.join('\n\n');
   }
+  return await callSingle(text);
+}
 
   // ==================== 翻译文件 ====================
   async function translateFile(f) {
@@ -605,75 +621,129 @@
 
   // ==================== 排版增强 genPDF ====================
   async function genPDF(text, name) {
-    let container = null;
-    try {
-      const { jsPDF } = window.jspdf;
-      if (!jsPDF || typeof html2canvas !== 'function') throw new Error('依赖库未加载');
+  let container = null;
+  try {
+    const { jsPDF } = window.jspdf;
+    if (!jsPDF || typeof html2canvas !== 'function') throw new Error('依赖库未加载');
 
-      let processedText = text || '暂无内容';
-      processedText = processedText.replace(/\n{2,}/g, '\n\n');
-      const rawParagraphs = processedText.split(/\n\s*\n/).filter(p => p.trim());
+    // 预处理：防止连续换行过多
+    let processedText = text || '暂无内容';
+    processedText = processedText.replace(/\n{3,}/g, '\n\n');
 
-      let html = '';
-      const isTitle = (p) => {
-        const trimmed = p.trim();
-        return trimmed.length < 80 && !/[。！？\.!\?]$/.test(trimmed) &&
-          (/^[\d一二三四五六七八九十]+[\.\、\s]/.test(trimmed) ||
-           /^(Abstract|Introduction|Methods|Results|Discussion|Conclusion|References|摘要|引言|方法|结果|讨论|结论|参考文献)/i.test(trimmed));
-      };
+    // 按照段落分割（两个及以上换行符切分）
+    const rawParagraphs = processedText.split(/\n\s*\n/).filter(p => p.trim());
 
-      for (let para of rawParagraphs) {
-        if (para.trim() === '') continue;
-        if (/^[\-—=_*#]{3,}$/.test(para.trim())) {
-          html += '<hr style="border:none;border-top:1px solid #000;margin:0.8em 0;">';
-        } else if (isTitle(para)) {
-          html += `<div style="font-size:18px;font-weight:bold;margin:1.2em 0 0.3em;">${escapeHtml(para)}</div>`;
-        } else {
-          html += `<p style="font-size:16px;text-indent:2em;margin:1em 0;line-height:1.9;">${escapeHtml(para)}</p>`;
-        }
+    // =============== 智能判断函数 ===============
+    const isTableRow = (p) => {
+      // 如果一行里包含连续的多个空格或制表符，大概率为表格行
+      return p.includes('\t') || /\s{3,}/.test(p);
+    };
+
+    const isTitle = (p) => {
+      const trimmed = p.trim();
+      // 1. 长度限制：字数小于 80
+      if (trimmed.length >= 100) return false;
+      // 2. 末尾没有句号/问号/感叹号（结尾通常是没标点的）
+      if (/[。！？\.!\?]$/.test(trimmed)) return false;
+      // 3. 包含常见章节关键词
+      const keywords = ['摘要','引言','方法','结果','讨论','结论','参考文献','Abstract','Introduction','Methods','Results','Discussion','Conclusion','References'];
+      const hasKeyword = keywords.some(k => trimmed.includes(k));
+      // 4. 或者以数字序号开头（如 1. Introduction, 2.1 实验方法, 一、背景）
+      const hasNumber = /^[\d一二三四五六七八九十]+[\.、\s]/.test(trimmed);
+      return hasKeyword || hasNumber;
+    };
+
+    const isListItem = (p) => {
+      return /^[\-•\*]\s+/.test(p.trim()) || /^[\(\d\)]\s+/.test(p.trim()) || /^\d+[\.\、]\s+/.test(p.trim());
+    };
+    // ============================================
+
+    // 组装 HTML
+    let html = '';
+    for (let para of rawParagraphs) {
+      if (para.trim() === '') continue;
+
+      // 分割线检测
+      if (/^[\-—=_*#]{3,}$/.test(para.trim())) {
+        html += `<hr style="border:none;border-top:1px solid #ccc;margin:1.2em 0;">`;
       }
-
-      const mmToPx = 3.779528;
-      const marginMm = 12;
-      const usableW = 210 - marginMm*2, usableH = 297 - marginMm*2;
-      const cssW = Math.floor(usableW*mmToPx), cssPageH = Math.floor(usableH*mmToPx);
-
-      container = document.createElement('div');
-      container.style.cssText = `position:absolute;left:-9999px;top:0;width:${cssW}px;height:${cssPageH}px;overflow:hidden;background:#fff;`;
-      const inner = document.createElement('div');
-      inner.style.cssText = `width:100%;padding:18px;box-sizing:border-box;font-family:"SimSun","宋体",serif;color:#000;background:#fff;line-height:1.9;`;
-      inner.innerHTML = html;
-      container.appendChild(inner);
-      document.body.appendChild(container);
-
-      await new Promise(r => requestAnimationFrame(r));
-      await new Promise(r => requestAnimationFrame(r));
-      const totalH = container.scrollHeight;
-
-      const doc = new jsPDF('p', 'mm', 'a4');
-      let pageCount = 0, scroll = 0;
-      while (scroll < totalH) {
-        container.scrollTop = scroll;
-        await new Promise(r => requestAnimationFrame(r));
-        const canvas = await html2canvas(container, { scale:2, useCORS:true, allowTaint:true, logging:false });
-        const imgData = canvas.toDataURL('image/jpeg', 0.92);
-        if (pageCount > 0) doc.addPage();
-        const imgH = (canvas.height / (cssW*2)) * usableW;
-        doc.addImage(imgData, 'JPEG', marginMm, marginMm, usableW, imgH);
-        scroll += cssPageH;
-        pageCount++;
+      // 表格内容检测（带制表符/长空格）
+      else if (isTableRow(para)) {
+        // 强制用等宽字体和 pre 标签保留对齐
+        const lines = para.split('\n');
+        html += `<div style="font-family: monospace; font-size: 13px; margin: 1em 0; padding: 0.5em; background: #f8f8f8; border-radius: 4px; white-space: pre-wrap; word-break: break-all;">`;
+        html += lines.map(line => escapeHtml(line)).join('\n');
+        html += `</div>`;
       }
-      if (container.parentNode) container.parentNode.removeChild(container);
-      console.log(`✅ PDF 共 ${pageCount} 页`);
-      return { blob: doc.output('blob'), filename: `${name}.pdf` };
-    } catch (err) {
-      if (container && container.parentNode) container.parentNode.removeChild(container);
-      console.error(err);
-      const { jsPDF } = window.jspdf;
-      const eDoc = new jsPDF(); eDoc.text('PDF 生成失败: ' + err.message, 10, 15);
-      return { blob: eDoc.output('blob'), filename: `${name}_error.pdf` };
+      // 标题检测
+      else if (isTitle(para)) {
+        html += `<div style="font-size: 18px; font-weight: bold; margin: 1.5em 0 0.8em 0; line-height: 1.5;">${escapeHtml(para)}</div>`;
+      }
+      // 列表项检测
+      else if (isListItem(para)) {
+        // 原样输出，增加左边距
+        html += `<div style="font-size: 16px; margin: 0.5em 0 0.5em 2em; line-height: 1.8;">${escapeHtml(para)}</div>`;
+      }
+      // 正文段落（首行缩进+段间距）
+      else {
+        html += `<p style="font-size: 16px; text-indent: 2em; margin: 1em 0; line-height: 1.9; text-align: justify;">${escapeHtml(para)}</p >`;
+      }
     }
+
+    // 屏幕像素和A4纸转换参数
+    const mmToPx = 3.779528;
+    const marginMm = 12;
+    const usableW = 210 - marginMm*2, usableH = 297 - marginMm*2;
+    const cssW = Math.floor(usableW*mmToPx);
+    const cssPageH = Math.floor(usableH*mmToPx);
+
+    // 创建隐藏排版容器
+    container = document.createElement('div');
+    container.style.cssText = `position:absolute;left:-9999px;top:0;width:${cssW}px;height:${cssPageH}px;overflow:hidden;background:#fff;`;
+    const inner = document.createElement('div');
+    inner.style.cssText = `width:100%;padding:18px;box-sizing:border-box;font-family:"SimSun","宋体","Noto Serif SC",serif;color:#000;background:#fff;line-height:1.9;`;
+    inner.innerHTML = html;
+    container.appendChild(inner);
+    document.body.appendChild(container);
+
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => requestAnimationFrame(r));
+    const totalH = container.scrollHeight;
+
+    // 生成 PDF 分页截图
+    const doc = new jsPDF('p', 'mm', 'a4');
+    let pageCount = 0, scroll = 0;
+    while (scroll < totalH) {
+      container.scrollTop = scroll;
+      await new Promise(r => requestAnimationFrame(r));
+      const canvas = await html2canvas(container, { scale: 2, useCORS: true, allowTaint: true, logging: false });
+      const imgData = canvas.toDataURL('image/jpeg', 0.92);
+      
+      if (pageCount > 0) doc.addPage();
+      
+      const imgH = (canvas.height / (cssW*2)) * usableW;
+      doc.addImage(imgData, 'JPEG', marginMm, marginMm, usableW, imgH);
+      
+      scroll += cssPageH;
+      pageCount++;
+    }
+
+    // 清理 DOM
+    if (container.parentNode) container.parentNode.removeChild(container);
+    
+    console.log(`✅ 智能排版完成，共生成 ${pageCount} 页`);
+    return { blob: doc.output('blob'), filename: `${name}.pdf` };
+
+  } catch (err) {
+    // 降级处理
+    if (container && container.parentNode) container.parentNode.removeChild(container);
+    console.error('PDF 排版生成出错:', err);
+    const { jsPDF } = window.jspdf;
+    const eDoc = new jsPDF();
+    eDoc.text('PDF 生成失败，错误信息: ' + err.message, 10, 15);
+    return { blob: eDoc.output('blob'), filename: `${name}_error.pdf` };
   }
+}
 
   function showToast(msg, err = false) {
     toast.textContent = msg;
