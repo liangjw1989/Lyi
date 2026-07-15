@@ -526,30 +526,74 @@
     return text.trim();
   }
 
-    // ==================== 安全版 callProxy（无密钥） ====================
+    // ==================== 统一翻译+排版 callProxy（腾讯云翻译，DeepSeek排版） ====================
 async function callProxy(text, target) {
-  const isLongText = text.length > 3000;
+  const MAX_CHUNK = 3000; // 每段最大字符数，避免腾讯云截断
 
-  // 短文档优先腾讯云，失败自动切 DeepSeek；长文档直接用 DeepSeek
-  const engines = isLongText ? ['deepseek'] : ['tencent', 'deepseek'];
+  // ========== 第一步：腾讯云分段翻译 ==========
+  let translatedText = '';
 
-  for (const engine of engines) {
-    try {
+  if (text.length <= MAX_CHUNK) {
+    // 短文档直接翻译
+    const res = await fetch(API_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, target, engine: 'tencent' })
+    });
+    const data = await res.json();
+    if (data.code !== 0) throw new Error(data.result || '腾讯云翻译失败');
+    translatedText = data.result;
+  } else {
+    // 长文档分段翻译
+    const sentences = text.match(/[^。！？\.!\?\n]+[。！？\.!\?\n]+|[^。！？\.!\?\n]+$/g) || [text];
+    let batches = [], cur = '';
+    for (const s of sentences) {
+      if ((cur + s).length > MAX_CHUNK && cur) {
+        batches.push(cur.trim());
+        cur = s;
+      } else {
+        cur += s;
+      }
+    }
+    if (cur.trim()) batches.push(cur.trim());
+    console.log(`📦 腾讯云翻译分为 ${batches.length} 段`);
+
+    const results = [];
+    for (const batch of batches) {
       const res = await fetch(API_PROXY_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, target, engine })
+        body: JSON.stringify({ text: batch, target, engine: 'tencent' })
       });
       const data = await res.json();
-      if (data.code === 0) {
-        console.log(`✅ ${engine} 翻译成功`);
-        return data.result;
-      }
-    } catch (err) {
-      console.warn(`${engine} 失败:`, err.message);
+      if (data.code !== 0) throw new Error(data.result || '腾讯云翻译失败');
+      results.push(data.result);
     }
+    translatedText = results.join('\n\n');
   }
-  throw new Error('所有翻译引擎均失败');
+
+  console.log('✅ 腾讯云翻译完成');
+
+  // ========== 第二步：DeepSeek 排版优化 ==========
+  try {
+    console.log('📝 正在用 DeepSeek 优化排版...');
+    const fmtRes = await fetch(API_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: translatedText, target, engine: 'reformat' })
+    });
+    const fmtData = await fmtRes.json();
+    if (fmtData.code === 0) {
+      console.log('✅ 排版优化完成');
+      return fmtData.result;
+    } else {
+      console.warn('排版优化失败，将使用未排版的翻译结果');
+      return translatedText;
+    }
+  } catch (fmtErr) {
+    console.warn('排版优化请求失败，将使用未排版的翻译结果:', fmtErr.message);
+    return translatedText;
+  }
 }
 
   // ==================== 翻译文件 ====================
