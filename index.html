@@ -526,25 +526,31 @@
     return text.trim();
   }
 
-    // ==================== 统一翻译+排版 callProxy（腾讯云翻译，DeepSeek排版） ====================
+    // ==================== 统一翻译+排版 callProxy（含语言修复） ====================
 async function callProxy(text, target) {
-  const MAX_CHUNK = 3000; // 每段最大字符数，避免腾讯云截断
+  // 腾讯云只接受简写语言代码，这里做一下转换
+  const langMap = {
+    'zh-CN': 'zh', 'zh': 'zh',
+    'en': 'en', 'ja': 'ja', 'ko': 'ko',
+    'fr': 'fr', 'de': 'de', 'es': 'es', 'ru': 'ru',
+    'pt': 'pt', 'it': 'it', 'ar': 'ar', 'th': 'th', 'vi': 'vi'
+  };
+  const tencentTarget = langMap[target] || target;  // 腾讯云用的语言代码
+  const MAX_CHUNK = 3000;
 
   // ========== 第一步：腾讯云分段翻译 ==========
   let translatedText = '';
 
   if (text.length <= MAX_CHUNK) {
-    // 短文档直接翻译
     const res = await fetch(API_PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, target, engine: 'tencent' })
+      body: JSON.stringify({ text, target: tencentTarget, engine: 'tencent' })
     });
     const data = await res.json();
     if (data.code !== 0) throw new Error(data.result || '腾讯云翻译失败');
     translatedText = data.result;
   } else {
-    // 长文档分段翻译
     const sentences = text.match(/[^。！？\.!\?\n]+[。！？\.!\?\n]+|[^。！？\.!\?\n]+$/g) || [text];
     let batches = [], cur = '';
     for (const s of sentences) {
@@ -563,7 +569,7 @@ async function callProxy(text, target) {
       const res = await fetch(API_PROXY_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: batch, target, engine: 'tencent' })
+        body: JSON.stringify({ text: batch, target: tencentTarget, engine: 'tencent' })
       });
       const data = await res.json();
       if (data.code !== 0) throw new Error(data.result || '腾讯云翻译失败');
@@ -577,6 +583,7 @@ async function callProxy(text, target) {
   // ========== 第二步：DeepSeek 排版优化 ==========
   try {
     console.log('📝 正在用 DeepSeek 优化排版...');
+    // 排版时仍然使用原始 target（比如 'zh-CN'），云函数内部会再次映射
     const fmtRes = await fetch(API_PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -587,11 +594,11 @@ async function callProxy(text, target) {
       console.log('✅ 排版优化完成');
       return fmtData.result;
     } else {
-      console.warn('排版优化失败，将使用未排版的翻译结果');
+      console.warn('排版优化失败，使用未排版的翻译结果');
       return translatedText;
     }
   } catch (fmtErr) {
-    console.warn('排版优化请求失败，将使用未排版的翻译结果:', fmtErr.message);
+    console.warn('排版优化请求失败，使用未排版的翻译结果:', fmtErr.message);
     return translatedText;
   }
 }
