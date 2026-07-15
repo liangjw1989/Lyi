@@ -589,34 +589,42 @@ async function callProxy(text, target) {
     renderAll();
   }
 
-  // ==================== Markdown 渲染版 genPDF ====================
+  // ==================== Markdown 渲染 + 特殊标签样式 genPDF ====================
 async function genPDF(text, name) {
   let container = null;
   try {
     const { jsPDF } = window.jspdf;
     if (!jsPDF || typeof html2canvas !== 'function') throw new Error('依赖库未加载');
 
-    // 1. Markdown 转 HTML（自动识别标题、表格、段落、加粗等）
+    // 1. Markdown 转 HTML
     let htmlContent;
     if (typeof marked !== 'undefined') {
       htmlContent = marked.parse(text || '暂无内容');
     } else {
-      // 降级：纯文本换行处理
       htmlContent = (text || '暂无内容').replace(/\n/g, '<br>');
     }
 
-    // 2. 包裹基础样式，确保中文字体和行距
+    // 2. 将 DeepSeek 生成的特殊标签替换为带样式的 HTML
+    htmlContent = htmlContent
+      .replace(/&lt;header&gt;([\s\S]*?)&lt;\/header&gt;/g,
+        '<div class="page-header" style="font-size:12px; color:#666; border-bottom:1px solid #ccc; margin-bottom:1em; padding-bottom:0.5em;">$1</div>')
+      .replace(/&lt;footer&gt;([\s\S]*?)&lt;\/footer&gt;/g,
+        '<div class="page-footer" style="font-size:12px; color:#666; border-top:1px solid #ccc; margin-top:1em; padding-top:0.5em;">$1</div>')
+      .replace(/&lt;note&gt;([\s\S]*?)&lt;\/note&gt;/g,
+        '<div class="annotation" style="font-size:13px; margin-left:1em; padding:0.5em; border-left:3px solid #aaa; color:#444; background:#f9f9f9;">$1</div>');
+
+    // 3. 包裹基础样式
     htmlContent = `<div style="font-family:'SimSun','宋体',serif; font-size:16px; line-height:1.9; color:#000; padding:18px; box-sizing:border-box;">
       ${htmlContent}
     </div>`;
 
-    // 3. 页面尺寸计算
+    // 4. 页面尺寸计算
     const mmToPx = 3.779528;
     const marginMm = 12;
     const usableW = 210 - marginMm*2, usableH = 297 - marginMm*2;
     const cssW = Math.floor(usableW*mmToPx), cssPageH = Math.floor(usableH*mmToPx);
 
-    // 4. 创建隐藏容器并渲染
+    // 5. 创建隐藏容器并渲染
     container = document.createElement('div');
     container.style.cssText = `position:absolute;left:-9999px;top:0;width:${cssW}px;height:${cssPageH}px;overflow:hidden;background:#fff;`;
     container.innerHTML = htmlContent;
@@ -626,7 +634,7 @@ async function genPDF(text, name) {
     await new Promise(r => requestAnimationFrame(r));
     const totalH = container.scrollHeight;
 
-    // 5. 分页截图生成 PDF
+    // 6. 分页截图生成 PDF
     const doc = new jsPDF('p', 'mm', 'a4');
     let pageCount = 0, scroll = 0;
     while (scroll < totalH) {
