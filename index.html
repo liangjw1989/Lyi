@@ -1366,22 +1366,22 @@ async function genPDF(text, name, mode = 'normal') {
         i++;
         continue;
       }
-      // ================== 特殊标记解析 ==================
+      // ================== 特殊标记解析（无粗体版） ==================
 // 主标题：居中大字
 if (line.startsWith('[[TITLE]]')) {
   const text = line.replace(/\[\[TITLE\]\]|\[\[\/TITLE\]\]/g, '').trim();
   content.push({
     text: text,
     fontSize: 24,
-    bold: true,
     alignment: 'center',
     margin: [0, 10, 0, 12],
-    lineHeight: 1.3
+    lineHeight: 1.3,
+    color: '#000000'
   });
   i++; continue;
 }
 
-// 作者：居中中字
+// 作者：居中
 if (line.startsWith('[[AUTHOR]]')) {
   const text = line.replace(/\[\[AUTHOR\]\]|\[\[\/AUTHOR\]\]/g, '').trim();
   content.push({
@@ -1400,22 +1400,22 @@ if (line.startsWith('[[AFFIL]]')) {
     text: text,
     fontSize: 11,
     italics: true,
-    color: '#555',
+    color: '#555555',
     alignment: 'center',
     margin: [0, 2, 0, 8]
   });
   i++; continue;
 }
 
-// 一级标题：左对齐大字
+// 一级标题：左对齐大字（不用 bold，靠字号突出）
 if (line.startsWith('[[H1]]')) {
   const text = line.replace(/\[\[H1\]\]|\[\[\/H1\]\]/g, '').trim();
   content.push({
     text: text,
     fontSize: 18,
-    bold: true,
     margin: [0, 12, 0, 6],
-    lineHeight: 1.3
+    lineHeight: 1.3,
+    color: '#000000'
   });
   i++; continue;
 }
@@ -1426,9 +1426,9 @@ if (line.startsWith('[[H2]]')) {
   content.push({
     text: text,
     fontSize: 15,
-    bold: true,
     margin: [0, 8, 0, 4],
-    lineHeight: 1.3
+    lineHeight: 1.3,
+    color: '#000000'
   });
   i++; continue;
 }
@@ -1439,20 +1439,20 @@ if (line.startsWith('[[KW]]')) {
   content.push({
     text: text,
     fontSize: 11,
-    color: '#444',
+    color: '#444444',
     margin: [0, 6, 0, 6],
     preserveLeadingSpaces: true
   });
   i++; continue;
 }
 
-// 参考文献条目：小字，悬挂缩进
+// 参考文献条目：小字缩进
 if (line.startsWith('[[REF]]')) {
   const text = line.replace(/\[\[REF\]\]|\[\[\/REF\]\]/g, '').trim();
   content.push({
     text: text,
     fontSize: 9,
-    color: '#333',
+    color: '#333333',
     margin: [10, 1, 0, 1],
     lineHeight: 1.3
   });
@@ -1541,18 +1541,17 @@ if (line.startsWith('[[REF]]')) {
         bold: false
       },
       styles: {
-        h1: { fontSize: isAiMode ? 22 : 24, bold: true, margin: [0, 10, 0, 6], lineHeight: 1.3 },
-        h2: { fontSize: isAiMode ? 19 : 20, bold: true, margin: [0, 8, 0, 5], lineHeight: 1.3 },
-        h3: { fontSize: isAiMode ? 16 : 17, bold: true, margin: [0, 6, 0, 4], lineHeight: 1.3 },
-        paragraph: {
-          margin: [0, 1, 0, 1],
-          fontSize: 12,
-          bold: false,
-          lineHeight: 1.4,
-          alignment: 'justify',
-          preserveLeadingSpaces: true
-        }
-      },
+  h1: { fontSize: isAiMode ? 22 : 24, margin: [0, 10, 0, 6], lineHeight: 1.3 },
+  h2: { fontSize: isAiMode ? 19 : 20, margin: [0, 8, 0, 5], lineHeight: 1.3 },
+  h3: { fontSize: isAiMode ? 16 : 17, margin: [0, 6, 0, 4], lineHeight: 1.3 },
+  paragraph: {
+    margin: [0, 1, 0, 1],
+    fontSize: 12,
+    lineHeight: 1.4,
+    alignment: 'justify',
+    preserveLeadingSpaces: true
+  }
+},
       content: content
     }; // 👈 这个分号是必须的，之前你的代码少了它导致报错
 
