@@ -985,88 +985,91 @@ async function extractPDF(file) {
     const buf = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
     let text = '';
-
-    const COLUMN_GAP_THRESHOLD = 5; // 表格列间距阈值
+    const COLUMN_GAP_THRESHOLD = 5;
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         const page = await pdf.getPage(pageNum);
         const viewport = page.getViewport({ scale: 1 });
+        const pageWidth = viewport.width;
         const pageHeight = viewport.height;
         const content = await page.getTextContent();
         const items = content.items;
         if (items.length === 0) continue;
 
-        const sorted = items.slice().sort((a, b) => {
-            if (Math.abs(a.transform[5] - b.transform[5]) > 5) {
-                return b.transform[5] - a.transform[5];
-            }
-            return a.transform[4] - b.transform[4];
-        });
+        // 核心修改：利用 x 坐标区分左右栏
+        // 如果第一个字 x < 页面宽度的 35%，判定为左栏
+        const leftItems = items.filter(item => item.transform[4] < pageWidth * 0.35);
+        const rightItems = items.filter(item => item.transform[4] >= pageWidth * 0.35);
 
-        let lastY = null;
-        let lineTexts = [];
+        // 分别处理左栏和右栏
+        const processItems = (items, colTag) => {
+            if (items.length === 0) return '';
+            const sorted = items.slice().sort((a, b) => {
+                if (Math.abs(a.transform[5] - b.transform[5]) > 5) {
+                    return b.transform[5] - a.transform[5];
+                }
+                return a.transform[4] - b.transform[4];
+            });
 
-        const flushLine = () => {
-            if (lineTexts.length === 0) return;
+            let lastY = null;
+            let lineTexts = [];
+            let resultText = '';
 
-            const firstItemY = lineTexts[0].transform[5];
-            const isHeader = firstItemY > pageHeight * 0.88; // 顶部12%
-            const isFooter = firstItemY < pageHeight * 0.12; // 底部12%
+            const flushLine = () => {
+                if (lineTexts.length === 0) return;
+                const firstItemY = lineTexts[0].transform[5];
 
-            let rowStr = '';
-            let isTableRow = false;
-            if (lineTexts.length >= 2) {
-                const xPositions = lineTexts.map(item => item.transform[4]);
-                for (let j = 1; j < xPositions.length; j++) {
-                    if (xPositions[j] - xPositions[j - 1] > COLUMN_GAP_THRESHOLD) {
-                        isTableRow = true;
-                        break;
+                // 丢弃页眉页脚
+                if (firstItemY > pageHeight * 0.88 || firstItemY < pageHeight * 0.12) {
+                    lineTexts = [];
+                    return;
+                }
+
+                let rowStr = '';
+                let isTableRow = false;
+                if (lineTexts.length >= 2) {
+                    const xPositions = lineTexts.map(item => item.transform[4]);
+                    for (let j = 1; j < xPositions.length; j++) {
+                        if (xPositions[j] - xPositions[j - 1] > COLUMN_GAP_THRESHOLD) {
+                            isTableRow = true;
+                            break;
+                        }
                     }
                 }
-            }
 
-            if (isTableRow) {
-                lineTexts.sort((a, b) => a.transform[4] - b.transform[4]);
-                let prevX = null;
-                for (const item of lineTexts) {
-                    if (prevX !== null && item.transform[4] - prevX > COLUMN_GAP_THRESHOLD) {
-                        rowStr += '\t';
-                    } else if (prevX !== null) {
-                        rowStr += ' ';
+                if (isTableRow) {
+                    lineTexts.sort((a, b) => a.transform[4] - b.transform[4]);
+                    let prevX = null;
+                    for (const item of lineTexts) {
+                        if (prevX !== null && item.transform[4] - prevX > COLUMN_GAP_THRESHOLD) {
+                            rowStr += '\t';
+                        } else if (prevX !== null) {
+                            rowStr += ' ';
+                        }
+                        rowStr += item.str;
+                        prevX = item.transform[4] + (item.width || 0);
                     }
-                    rowStr += item.str;
-                    prevX = item.transform[4] + (item.width || 0);
+                    resultText += rowStr.trim() + '\n';
+                } else {
+                    rowStr = lineTexts.map(item => item.str).join(' ');
+                    // 加上左/右栏标签
+                    resultText += colTag + rowStr.trim() + '\n';
                 }
-            } else {
-                rowStr = lineTexts.map(item => item.str).join(' ');
-            }
-
-            // 【核心】检测到页眉页脚，直接丢弃，不加入正文
-            if (isHeader || isFooter) {
                 lineTexts = [];
-                return;
-            }
+            };
 
-            if (isTableRow) {
-                text += rowStr.trim() + '\n';
-            } else {
-                text += rowStr.trim() + '\n';
+            for (const item of sorted) {
+                const currentY = item.transform[5];
+                if (lastY === null) lastY = currentY;
+                else if (Math.abs(currentY - lastY) > 5) { flushLine(); lastY = currentY; }
+                lineTexts.push(item);
             }
-
-            lineTexts = [];
+            flushLine();
+            return resultText;
         };
 
-        for (const item of sorted) {
-            const currentY = item.transform[5];
-            if (lastY === null) {
-                lastY = currentY;
-            } else if (Math.abs(currentY - lastY) > 5) {
-                flushLine();
-                lastY = currentY;
-            }
-            lineTexts.push(item);
-        }
-        flushLine();
+        text += processItems(leftItems, '[LEFT]');
+        text += processItems(rightItems, '[RIGHT]');
         text += '\n---\n';
     }
 
