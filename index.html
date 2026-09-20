@@ -1473,7 +1473,60 @@ if (line.startsWith('[[REF]]')) {
         content.push({ text: line.substring(2), style: 'h1' });
         i++; continue;
       }
+// ================== 处理左右双栏排版 ==================
+if (line.startsWith('[LEFT]') || line.startsWith('[RIGHT]')) {
+  let leftLines = [];
+  let rightLines = [];
 
+  // 收集连续的左栏和右栏内容
+  while (i < lines.length && (lines[i].trim().startsWith('[LEFT]') || lines[i].trim().startsWith('[RIGHT]'))) {
+    const cur = lines[i].trim();
+    if (cur.startsWith('[LEFT]')) leftLines.push(cur.substring(6).trim());
+    else if (cur.startsWith('[RIGHT]')) rightLines.push(cur.substring(7).trim());
+    i++;
+  }
+
+  // 如果两边都有内容，构建双栏排版（左窄右宽）
+  if (leftLines.length > 0 && rightLines.length > 0) {
+    content.push({
+      columns: [
+        {
+          width: '28%',
+          text: leftLines.join('\n'),
+          fontSize: 9,
+          color: '#555555',
+          alignment: 'justify',
+          preserveLeadingSpaces: true
+        },
+        {
+          width: '72%',
+          text: rightLines.join('\n'),
+          fontSize: 12,
+          color: '#000000',
+          alignment: 'justify',
+          preserveLeadingSpaces: true
+        }
+      ],
+      columnGap: 15,
+      margin: [0, 4, 0, 4]
+    });
+  } else if (leftLines.length > 0) {
+    content.push({
+      text: leftLines.join('\n'),
+      fontSize: 9,
+      color: '#555555',
+      margin: [0, 4, 0, 4]
+    });
+  } else if (rightLines.length > 0) {
+    content.push({
+      text: rightLines.join('\n'),
+      fontSize: 12,
+      margin: [0, 4, 0, 4]
+    });
+  }
+  continue;
+}
+// ==================================================
       // ================== 3. 表格检测与渲染 ==================
       if (line.startsWith('|') && line.split('|').length >= 3) {
         const tableRows = [];
