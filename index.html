@@ -1508,10 +1508,13 @@ if (line.startsWith('[LEFT]') || line.startsWith('[RIGHT]')) {
       }
       i++;
     } else {
-      // 遇到表格或标题，停止收集
-      break;
-    }
+  // 容错：如果遇到没有 [LEFT]/[RIGHT] 标签的普通段落，默认为右栏内容
+  if (cur !== '') {
+    rightLines.push(cur);
+    rightLen += cur.length;
   }
+  i++;
+}
 
   // 动态计算宽度和字号（参考你的建议）
   let leftWidth = '22%';
@@ -1643,7 +1646,7 @@ if (line.startsWith('[LEFT]') || line.startsWith('[RIGHT]')) {
       pageSize: 'A4',
       pageMargins: [40, 40, 40, 40],
       defaultStyle: {
-        font: 'SourceHanSerifSC',
+        font: 'Roboto',
         fontSize: 12,
         lineHeight: 1.4,
         color: '#000',
@@ -1676,7 +1679,7 @@ if (line.startsWith('[LEFT]') || line.startsWith('[RIGHT]')) {
     console.error('生成文字型 PDF 失败：', err);
     try {
       const errorDoc = pdfMake.createPdf({
-        defaultStyle: { font: 'SourceHanSerifSC', fontSize: 12 },
+        defaultStyle: { font: 'Roboto', fontSize: 12 },
         content: [
           { text: 'PDF 生成失败', fontSize: 18, bold: true },
           { text: '错误信息：' + err.message }
