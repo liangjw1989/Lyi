@@ -1478,13 +1478,28 @@ if (line.startsWith('[LEFT]') || line.startsWith('[RIGHT]')) {
   let leftLines = [];
   let rightLines = [];
 
-  // 收集连续的左栏和右栏内容
-  while (i < lines.length && (lines[i].trim().startsWith('[LEFT]') || lines[i].trim().startsWith('[RIGHT]'))) {
-    const cur = lines[i].trim();
-    if (cur.startsWith('[LEFT]')) leftLines.push(cur.substring(6).trim());
-    else if (cur.startsWith('[RIGHT]')) rightLines.push(cur.substring(7).trim());
+  // 收集左右栏内容（允许中间有空行或分隔线 ---）
+while (i < lines.length) {
+  const cur = lines[i].trim();
+
+  // 遇到空行或分隔线，跳过并继续收集
+  if (cur === '' || cur.startsWith('---')) {
     i++;
+    continue;
   }
+
+  // 属于左栏或右栏的，收集起来
+  if (cur.startsWith('[LEFT]')) {
+    leftLines.push(cur.substring(6).trim());
+    i++;
+  } else if (cur.startsWith('[RIGHT]')) {
+    rightLines.push(cur.substring(7).trim());
+    i++;
+  } else {
+    // 遇到其他内容（表格、标题等），停止收集
+    break;
+  }
+}
 
   // 如果两边都有内容，构建双栏排版（左窄右宽）
   if (leftLines.length > 0 && rightLines.length > 0) {
