@@ -1227,6 +1227,7 @@ async function checkUserQuota(mode) {
     updateFileProgress(f);
     try {
       const text = await extractText(f.file, f.ext);
+      console.log('🔍 提取后的原文前800字:', text.substring(0, 800)); // 新增这行
       if (!text.trim()) throw new Error('文件中没有可提取的文字');
       f.extractedText = text;
       f.status = 'translating';
@@ -1235,6 +1236,7 @@ async function checkUserQuota(mode) {
 
       // 调用翻译代理（腾讯云翻译 + DeepSeek 排版）
       const translated = await callProxy(text, f.targetLang, f.translateMode || 'normal');
+      console.log('🎯 翻译后的文本前800字:', translated.substring(0, 800)); // 新增这行
       f.translatedText = translated;
       f.progress = 80;
       updateFileProgress(f);
@@ -1473,57 +1475,93 @@ if (line.startsWith('[[REF]]')) {
         content.push({ text: line.substring(2), style: 'h1' });
         i++; continue;
       }
-// ================== 处理左右双栏排版 ==================
+// ================== 处理左右双栏排版（动态宽度） ==================
 if (line.startsWith('[LEFT]') || line.startsWith('[RIGHT]')) {
   let leftLines = [];
   let rightLines = [];
+  let leftLen = 0;
+  let rightLen = 0;
 
-  // 收集左右栏内容（允许中间有空行或分隔线 ---）
-while (i < lines.length) {
-  const cur = lines[i].trim();
+  // 收集左右栏内容（允许穿插空行和 ---）
+  while (i < lines.length) {
+    const cur = lines[i].trim();
 
-  // 遇到空行或分隔线，跳过并继续收集
-  if (cur === '' || cur.startsWith('---')) {
-    i++;
-    continue;
+    if (cur === '' || cur.startsWith('---')) {
+      if (leftLines.length > 0 && cur === '') leftLines.push('');
+      if (rightLines.length > 0 && cur === '') rightLines.push('');
+      i++;
+      continue;
+    }
+
+    if (cur.startsWith('[LEFT]')) {
+      const t = cur.substring(6).trim();
+      if (t) {
+        leftLines.push(t);
+        leftLen += t.length;
+      }
+      i++;
+    } else if (cur.startsWith('[RIGHT]')) {
+      const t = cur.substring(7).trim();
+      if (t) {
+        rightLines.push(t);
+        rightLen += t.length;
+      }
+      i++;
+    } else {
+      // 遇到表格或标题，停止收集
+      break;
+    }
   }
 
-  // 属于左栏或右栏的，收集起来
-  if (cur.startsWith('[LEFT]')) {
-    leftLines.push(cur.substring(6).trim());
-    i++;
-  } else if (cur.startsWith('[RIGHT]')) {
-    rightLines.push(cur.substring(7).trim());
-    i++;
-  } else {
-    // 遇到其他内容（表格、标题等），停止收集
-    break;
-  }
-}
+  // 动态计算宽度和字号（参考你的建议）
+  let leftWidth = '22%';
+  let rightWidth = '78%';
+  let leftFontSize = 9;
+  let rightFontSize = 12;
+  let leftColor = '#555555';
 
-  // 如果两边都有内容，构建双栏排版（左窄右宽）
+  const totalLen = leftLen + rightLen;
+  if (totalLen > 0) {
+    const leftRatio = leftLen / totalLen;
+    // 如果左右篇幅相当，按 50/50 处理
+    if (leftRatio >= 0.35 && leftRatio <= 0.65) {
+      leftWidth = '50%';
+      rightWidth = '50%';
+      leftFontSize = 12;
+      rightFontSize = 12;
+      leftColor = '#000000'; // 50/50 时左右同等重要，都用黑色
+    } else if (leftRatio > 0.65) {
+      // 左边比右边长（少见情况）
+      leftWidth = '70%';
+      rightWidth = '30%';
+    }
+  }
+
+  // 构建双栏
   if (leftLines.length > 0 && rightLines.length > 0) {
     content.push({
       columns: [
         {
-          width: '28%',
+          width: leftWidth,
           text: leftLines.join('\n'),
-          fontSize: 9,
-          color: '#555555',
+          fontSize: leftFontSize,
+          color: leftColor,
           alignment: 'justify',
-          preserveLeadingSpaces: true
+          preserveLeadingSpaces: true,
+          lineHeight: 1.3
         },
         {
-          width: '72%',
+          width: rightWidth,
           text: rightLines.join('\n'),
-          fontSize: 12,
+          fontSize: rightFontSize,
           color: '#000000',
           alignment: 'justify',
-          preserveLeadingSpaces: true
+          preserveLeadingSpaces: true,
+          lineHeight: 1.4
         }
       ],
       columnGap: 15,
-      margin: [0, 4, 0, 4]
+      margin: [0, 4, 0, 8]
     });
   } else if (leftLines.length > 0) {
     content.push({
@@ -1541,7 +1579,7 @@ while (i < lines.length) {
   }
   continue;
 }
-// ==================================================
+// ============================================================
       // ================== 3. 表格检测与渲染 ==================
       if (line.startsWith('|') && line.split('|').length >= 3) {
         const tableRows = [];
