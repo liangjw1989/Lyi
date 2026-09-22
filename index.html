@@ -1487,38 +1487,32 @@ async function genPDF(text, name, mode = 'normal') {
 
         // 收集左右栏内容（允许穿插空行和 ---）
         while (i < lines.length) {
-          const cur = lines[i].trim();
+  const cur = lines[i].trim();
 
-          if (cur === '' || cur.startsWith('---')) {
-            if (leftLines.length > 0 && cur === '') leftLines.push('');
-            if (rightLines.length > 0 && cur === '') rightLines.push('');
-            i++;
-            continue;
-          }
+  if (cur === '' || cur.startsWith('---')) {
+    if (leftLines.length > 0 && cur === '') leftLines.push('');
+    if (rightLines.length > 0 && cur === '') rightLines.push('');
+    i++;
+    continue;
+  }
 
-          if (cur.startsWith('[LEFT]')) {
-            const t = cur.substring(6).trim();
-            if (t) {
-              leftLines.push(t);
-              leftLen += t.length;
-            }
-            i++;
-          } else if (cur.startsWith('[RIGHT]')) {
-            const t = cur.substring(7).trim();
-            if (t) {
-              rightLines.push(t);
-              rightLen += t.length;
-            }
-            i++;
-          } else {
-            // 容错：如果遇到没有 [LEFT]/[RIGHT] 标签的普通段落，默认为右栏内容
-            if (cur !== '') {
-              rightLines.push(cur);
-              rightLen += cur.length;
-            }
-            i++;
-          }
-        } // 👈 【重要修复】补充这个 }，结束 while 循环，否则语法就崩了
+  if (cur.startsWith('[LEFT]')) {
+    const t = cur.substring(6).trim();
+    if (t) { leftLines.push(t); leftLen += t.length; }
+    i++;
+  } else if (cur.startsWith('[RIGHT]')) {
+    const t = cur.substring(7).trim();
+    if (t) { rightLines.push(t); rightLen += t.length; }
+    i++;
+  } else {
+    // 【关键容错】如果遇到没有标签的普通段落，默认按右栏（正文）处理
+    if (cur !== '') {
+      rightLines.push(cur);
+      rightLen += cur.length;
+    }
+    i++;
+  }
+} 
 
         // 动态计算宽度和字号
         let leftWidth = '22%';
