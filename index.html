@@ -1601,43 +1601,44 @@ async function genPDF(text, name, mode = 'normal') {
         }
         
         if (tableRows.length > 0) {
-          const maxCols = Math.max(...tableRows.map(row => row.length));
-          const normalizedRows = tableRows.map((row, rowIndex) => {
-  while (row.length < maxCols) { row.push(''); }
-  return row.map(cell => {
-    // 判断是否需要居中：第一行表头，或纯数字
-    const isHeader = rowIndex === 0;
-    const isNumeric = /^[\d\.\-\s%]+$/.test(cell);
-    return {
-      text: cell,
-      alignment: (isHeader || isNumeric) ? 'center' : 'left',
-      fontSize: tableFontSize
-    };
+  const maxCols = Math.max(...tableRows.map(row => row.length));
+
+  // 👇 1. 先计算字体大小
+  let tableFontSize = 10;
+  if (maxCols >= 8) tableFontSize = 8;
+  if (maxCols >= 10) tableFontSize = 7;
+  if (maxCols >= 12) tableFontSize = 6;
+  if (maxCols >= 15) tableFontSize = 5;
+
+  // 👇 2. 再构建标准化行（在内部使用已经定义好的 tableFontSize）
+  const normalizedRows = tableRows.map((row, rowIndex) => {
+    while (row.length < maxCols) { row.push(''); }
+    return row.map(cell => {
+      const isHeader = rowIndex === 0;
+      const isNumeric = /^[\d\.\-\s%]+$/.test(cell);
+      return {
+        text: cell,
+        alignment: (isHeader || isNumeric) ? 'center' : 'left',
+        fontSize: tableFontSize  // 此时 tableFontSize 已经定义好了
+      };
+    });
   });
-});
 
-          // 根据列数动态计算字号
-          let tableFontSize = 10;
-          if (maxCols >= 8) tableFontSize = 8;
-          if (maxCols >= 10) tableFontSize = 7;
-          if (maxCols >= 12) tableFontSize = 6;
-          if (maxCols >= 15) tableFontSize = 5;
+  // 👇 3. 让所有列宽平均分配（这是你刚才改好的）
+  let colWidths = Array(maxCols).fill('*');
 
-          // 让所有列宽平均分配
-          let colWidths = Array(maxCols).fill('*');
-
-          content.push({
-            table: {
-              headerRows: 1,
-              widths: colWidths,
-              body: normalizedRows
-            },
-            layout: 'lightHorizontalLines',
-            margin: [0, 6],
-            fontSize: tableFontSize,
-            dontBreakRows: true
-          });
-        }
+  // 👇 4. 推入内容
+  content.push({
+    table: {
+      headerRows: 1,
+      widths: colWidths,
+      body: normalizedRows
+    },
+    layout: 'lightHorizontalLines',
+    margin: [0, 6],
+    dontBreakRows: true
+  });
+}
         continue;
       }
 
