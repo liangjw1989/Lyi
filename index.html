@@ -1602,10 +1602,19 @@ async function genPDF(text, name, mode = 'normal') {
         
         if (tableRows.length > 0) {
           const maxCols = Math.max(...tableRows.map(row => row.length));
-          const normalizedRows = tableRows.map(row => {
-            while (row.length < maxCols) { row.push(''); }
-            return row;
-          });
+          const normalizedRows = tableRows.map((row, rowIndex) => {
+  while (row.length < maxCols) { row.push(''); }
+  return row.map(cell => {
+    // 判断是否需要居中：第一行表头，或纯数字
+    const isHeader = rowIndex === 0;
+    const isNumeric = /^[\d\.\-\s%]+$/.test(cell);
+    return {
+      text: cell,
+      alignment: (isHeader || isNumeric) ? 'center' : 'left',
+      fontSize: tableFontSize
+    };
+  });
+});
 
           // 根据列数动态计算字号
           let tableFontSize = 10;
@@ -1614,13 +1623,8 @@ async function genPDF(text, name, mode = 'normal') {
           if (maxCols >= 12) tableFontSize = 6;
           if (maxCols >= 15) tableFontSize = 5;
 
-          // 动态列宽：让最后一列获得足够空间
-          let colWidths = [];
-          if (maxCols > 2) {
-            colWidths = Array(maxCols - 1).fill('auto').concat(['*']);
-          } else {
-            colWidths = Array(maxCols).fill('*');
-          }
+          // 让所有列宽平均分配
+          let colWidths = Array(maxCols).fill('*');
 
           content.push({
             table: {
